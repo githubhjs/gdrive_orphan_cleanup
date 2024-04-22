@@ -61,6 +61,9 @@ def get_orphan_files(service):
                     total_files_processed += 1
                     # If the file has no parents and it's not shared, it is an orphan.
                     if not 'parents' in item and not item.get('shared', False):
+                        # Find or create _ORPHAN folder (Do this once at the beginning)
+                        orphan_folder_id = create_orphan_folder(service)
+
                         # Move the file
                         service.files().update(fileId=item['id'], 
                                                addParents=orphan_folder_id,
