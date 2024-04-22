@@ -61,16 +61,11 @@ def get_orphan_files(service):
                     total_files_processed += 1
                     # If the file has no parents and it's not shared, it is an orphan.
                     if not 'parents' in item and not item.get('shared', False):
-                        # Find or create _ORPHAN folder (Do this once at the beginning)
-                        orphan_folder_id = create_orphan_folder(service)  
-                
-                        # Update the metadata to move the file into the ORPHAN folder
-                        new_metadata = {'parents': [orphan_folder_id]}  
-                
                         # Move the file
-                        service.files().update(fileId=item['id'], body=new_metadata, 
+                        service.files().update(fileId=item['id'], 
+                                               addParents=orphan_folder_id,
                                                fields='id, parents').execute()
-                
+                                   
                         print(f'Moved orphan file/folder "{item["name"]}" to "_ORPHAN"') 
 
                 page_token = results.get('nextPageToken', None)
