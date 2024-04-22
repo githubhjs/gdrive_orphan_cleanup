@@ -10,6 +10,15 @@ import time
 # If modifying these SCOPES, delete the file token.pickle.
 SCOPES = ['https://www.googleapis.com/auth/drive']
 
+def create_orphan_folder(service):
+    file_metadata = {
+        'name': '_ORPHAN',
+        'mimeType': 'application/vnd.google-apps.folder'
+    }
+    folder = service.files().create(body=file_metadata, fields='id').execute()
+    print(f'Created "_ORPHAN" folder with ID: {folder.get("id")}')
+    return folder.get('id')
+
 def authenticate_google_drive():
     """Authenticates the user with Google Drive and returns the service."""
     creds = None
