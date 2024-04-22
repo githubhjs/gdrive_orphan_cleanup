@@ -37,51 +37,6 @@ def authenticate_google_drive():
 
     return build('drive', 'v3', credentials=creds)
 
-def delete_folder_contents(service, folder_id):
-    """Deletes the contents of a given folder."""
-    attempt = 0
-    while attempt <= 5:
-        try:
-            print("Listing files in folder with id: ", folder_id)
-            results = service.files().list(
-                q="'{}' in parents".format(folder_id),
-                pageSize=1000, fields="files(id, mimeType)").execute()
-
-            items = results.get('files', [])
-            if not items:
-                print("No items found in the folder with id: ", folder_id)
-                break
-            
-            for item in items:
-                print("Found item with id: ", item['id'])
-                try:  
-                    if item['mimeType'] == 'application/vnd.google-apps.folder':
-                        print("Item is a folder. Recursively deleting contents.")
-                        delete_folder_contents(service, item['id'])
-                    print("Deleting item with id: ", item['id'])
-                    service.files().delete(fileId=item['id']).execute()
-                    print("Deleted item with id: ", item['id'])
-                    attempt = 0
-                except HttpError as e: 
-                    print('An HTTP error occurred while deleting file/folder:', e)
-                    attempt += 1
-                    if attempt <= 5:
-                        time.sleep(2**attempt)
-                    else:
-                        print('Too many errors occurred while deleting file/folder. Moving on to the next file.')
-                        break
-
-        except HttpError as e:
-            print('An HTTP error occurred while listing folder contents:', e)
-            attempt += 1
-            if attempt <= 5:
-                time.sleep(2**attempt)
-                continue
-            else:
-                print('Too many errors occurred while listing folder contents. Moving on to the next folder.')
-                break
-
-
 def get_orphan_files(service):
     """Get and remove orphan files in Google Drive."""
     page_token = None
@@ -106,14 +61,17 @@ def get_orphan_files(service):
                     total_files_processed += 1
                     # If the file has no parents and it's not shared, it is an orphan.
                     if not 'parents' in item and not item.get('shared', False):
-                        orphan_files.append(item)
-                        print('Orphan File/Folder Found:', u'{0} ({1})'.format(item['name'], item['id']))
-                        if item['mimeType'] == 'application/vnd.google-apps.folder':
-                            delete_folder_contents(service, item['id'])
-                            print('Removing orphan folder:', u'{0} ({1})'.format(item['name'], item['id']))
-                        else:
-                            print('Removing orphan file:', u'{0} ({1})'.format(item['name'], item['id']))
-                        service.files().delete(fileId=item['id']).execute()
+                        # Find or create _ORPHAN folder (Do this once at the beginning)
+                        orphan_folder_id = create_orphan_folder(service)  
+                
+                        # Update the metadata to move the file into the ORPHAN folder
+                        new_metadata = {'parents': [orphan_folder_id]}  
+                
+                        # Move the file
+                        service.files().update(fileId=item['id'], body=new_metadata, 
+                                               fields='id, parents').execute()
+                
+                        print(f'Moved orphan file/folder "{item["name"]}" to "_ORPHAN"') 
 
                 page_token = results.get('nextPageToken', None)
                 # If the request succeeded, reset the attempt count.
